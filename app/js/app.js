@@ -2,6 +2,7 @@ import * as L from './logic.js';
 import { BIU, PROGRAMMES, catalog, semesterCourses } from './biu.js';
 import { spark, sound, buzz, confetti, countUp, setSound } from './fx.js';
 import { QUESTIONS, answer, route as routeQuestion } from './ask.js';
+import * as M from './milestones.js';
 
 /* ============================== Storage & state ============================== */
 
@@ -24,6 +25,7 @@ function defaults() {
     profile: { name: '', prog: 'csc', mode: 'full', entry: 'utme', level: 100, target: null, policy: 'all', calc: 'weighted', sound: true, theme: 'system', onboarded: false, installDismissed: false, revealed: false },
     semesters: [],
     plan: { days: [1, 2, 3, 4, 5], start: '19:00', length: 60, perDay: 1, breakMin: 10, fromISO: todayISO(), untilISO: plusDaysISO(98), alarm: 10, added: {}, custom: false },
+    progress: M.emptyProgress(todayISO()),
   };
 }
 
@@ -51,7 +53,7 @@ function sanitize(raw) {
     return { id: String(s.id || L.uid()), level: lv, sem: sm, current, name: current ? 'This semester' : lv && sm ? semName(lv, sm) : String(s.name || 'Semester'), courses };
   });
   sortSemesters(semesters);
-  return { v: 2, profile, plan, semesters };
+  return { v: 2, profile, plan, semesters, progress: M.sanitizeProgress(raw.progress, todayISO()) };
 }
 function sortSemesters(list) { list.sort((a, b) => (a.current - b.current) || ((a.level || 999) - (b.level || 999)) || ((a.sem || 9) - (b.sem || 9))); }
 function load() { try { return sanitize(JSON.parse(store.getItem(KEY) || 'null')); } catch { return defaults(); } }
@@ -168,6 +170,138 @@ function confirmSheet({ title, body, ok = 'Confirm', danger }) {
   });
 }
 
+/* ============================== Milestone moments ============================== */
+
+const FLAME = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12.5 2.5c.6 3.8 6 5.9 6 11.6A6.5 6.5 0 0 1 5.5 14c0-3.1 1.6-5.2 3.2-6.6.1 2.1 1 3.4 2.4 3.9-.5-3.1 0-6.1 1.4-8.8z" fill="currentColor"/><path d="M12 21a3.2 3.2 0 0 1-3.2-3.2c0-2 1.6-3.1 2.4-4.6.6 1.6 4 2.4 4 4.6A3.2 3.2 0 0 1 12 21z" fill="#fff" opacity=".55"/></svg>';
+const ORDER = ['—', 'Pass', '3rd', '2:2', '2:1', '1st'];
+const mq = [];
+let mOpen = false, mdlg = null;
+
+/** Queue a full-screen moment. tone: win | streak | miss | info */
+function moment(m) { mq.push(m); if (!mOpen) nextMoment(); }
+function nextMoment() {
+  const m = mq.shift();
+  if (!m) { mOpen = false; return; }
+  mOpen = true;
+  if (!mdlg) {
+    mdlg = document.createElement('dialog'); mdlg.id = 'moment'; mdlg.setAttribute('aria-labelledby', 'm-title'); document.body.appendChild(mdlg);
+    mdlg.addEventListener('close', () => setTimeout(nextMoment, 220));
+    mdlg.addEventListener('click', (e) => { if (e.target === mdlg) mdlg.close(); });
+  }
+  mdlg.innerHTML = `<div class="moment tone-${m.tone}">
+    <div class="m-hero">${m.hero || spark(m.mood || 'proud', 112, m.tone === 'miss' ? '' : 'jump')}</div>
+    <p class="m-kicker">${esc(m.kicker)}</p><h2 id="m-title">${m.title}</h2>
+    ${m.body ? `<p class="m-body">${m.body}</p>` : ''}${m.extra || ''}
+    <div class="m-actions">${m.secondary ? `<button type="button" class="btn" data-m="2">${esc(m.secondary.label)}</button>` : ''}<button type="button" class="btn ${m.tone === 'miss' ? 'blue' : 'primary'}" data-m="1">${esc(m.ok || 'Continue')}</button></div></div>`;
+  mdlg.querySelector('[data-m="1"]').onclick = () => { mdlg.close(); m.onOk?.(); };
+  mdlg.querySelector('[data-m="2"]')?.addEventListener('click', () => { mdlg.close(); m.secondary.run(); });
+  mdlg.showModal(); mdlg.querySelector('[data-m="1"]').focus();
+  if (m.tone === 'win' || m.tone === 'streak') { sound.yay(); confetti(m.tone === 'streak' ? 70 : 110); buzz([10, 40, 10]); }
+  else if (m.tone === 'miss') { sound.soft(); buzz(20); } else sound.ding();
+}
+const flameHero = (n) => `<div class="m-flame">${FLAME}<b class="num">${n}</b></div>`;
+const bigNum = (txt, cls) => `<div class="m-num tile ${cls}"><b class="num">${txt}</b></div>`;
+function weekDots(row, pop) {
+  const n = row.filter((d) => d.state === 'done').length;
+  return `${pop !== undefined || row.caption ? '<p class="tiny muted" style="margin:6px 0 -2px;font-weight:800">This week</p>' : ''}<div class="wk" role="img" aria-label="This week: ${n} reading day${n === 1 ? '' : 's'} done">${row.map((d) => `<span class="wd ${d.state} ${d.iso === pop ? 'pop' : ''}"><i>${d.state === 'done' ? I.check : d.state === 'missed' ? '·' : ''}</i><b>${d.label}</b></span>`).join('')}</div>`;
+}
+const firstName = () => esc((P().name || '').trim().split(/\s+/)[0] || 'friend');
+
+/** What the results looked like before a change, to compare after it. */
+function snap() {
+  const cg = L.cgpa(state.semesters, P().policy), plan = calcPlan();
+  return {
+    cg, cls: cg.gpa != null ? L.classify(cg.gpa) : null, plan, best: M.bestSemester(state.semesters, L.semesterGpa),
+    goals: Object.fromEntries(coachNow().courses.filter((c) => c.target).map((c) => [c.id, { code: c.code, target: c.target }])),
+    pending: new Set(L.inProgress(state.semesters).map((c) => c.id)),
+  };
+}
+/** Compare with a snapshot and queue the moments that matter. Returns how many were shown. */
+function celebrate(before) {
+  const after = snap(), out = [], hasPlan = L.inProgress(state.semesters).length > 0;
+  const toPlan = () => { location.hash = '#plan'; };
+  // 1. First CGPA
+  if (!before.cg.units && after.cg.units) {
+    const need = P().target && after.plan.status === 'possible' ? `To graduate with <b>${esc(targetLabel())}</b>, average <b>${f2(after.plan.required)}</b> from now on.` : '';
+    out.push({ tone: 'win', kicker: 'YOUR CGPA', hero: bigNum(f2(after.cg.gpa), clsCss(after.cg.gpa)), title: esc(after.cls.label), body: `${after.cg.units} units of results counted. ${need}`, ok: hasPlan ? 'See my plan' : 'Nice', onOk: hasPlan ? toPlan : null });
+  }
+  // 2. This semester's grades vs the goals they had
+  const graded = []; for (const s of state.semesters) for (const c of s.courses) if (before.pending.has(c.id) && c.grade) graded.push(c);
+  const res = M.gradeResults(before.goals, graded);
+  if (res.length) {
+    const hits = res.filter((r) => r.kind !== 'miss').length, misses = res.length - hits;
+    const rows = `<div class="m-list">${res.map((r) => `<div class="m-row ${r.kind}"><b>${esc(r.code)}</b><span class="tiny muted">goal ${r.target}</span>${gradeChip(r.grade)}<span class="m-ic" aria-label="${r.kind === 'miss' ? 'below goal' : r.kind === 'beat' ? 'beat goal' : 'hit goal'}">${r.kind === 'miss' ? '↓' : r.kind === 'beat' ? '↑' : I.check}</span></div>`).join('')}</div>`;
+    const need = after.plan.status === 'possible' && P().target ? ` From here, average <b>${f2(after.plan.required)}</b> for ${esc(targetLabel())}.` : '';
+    if (!misses) out.push({ tone: 'win', kicker: 'RESULTS ARE IN', title: res.length === 1 ? `You hit your goal in ${esc(res[0].code)}!` : 'You hit every goal!', body: `This is exactly how it’s done.${need}`, extra: rows });
+    else if (hits >= misses) out.push({ tone: 'info', mood: 'happy', kicker: 'RESULTS ARE IN', title: `You hit ${hits} of ${res.length} goals`, body: `Good work. The ones below goal now get more weight in your plan.${need}`, extra: rows, ok: 'See my plan', onOk: toPlan });
+    else out.push({ tone: 'miss', mood: 'worried', kicker: 'RESULTS ARE IN', title: hits ? `${hits} of ${res.length} goals this time` : 'Tough results this time', body: `One semester doesn’t decide your class. I’ve updated your plan around these.${need}`, extra: rows, ok: 'See my new plan', onOk: toPlan });
+  }
+  // 3. Class moved
+  if (before.cls && after.cls && before.cls.short !== after.cls.short) {
+    const up = ORDER.indexOf(after.cls.short) > ORDER.indexOf(before.cls.short);
+    out.push(up
+      ? { tone: 'win', kicker: 'LEVEL UP', hero: bigNum(f2(after.cg.gpa), clsCss(after.cg.gpa)), title: `You moved up to ${esc(after.cls.label)}!`, body: `From ${f2(before.cg.gpa)} to ${f2(after.cg.gpa)}. Keep this exact energy.` }
+      : { tone: 'miss', mood: 'worried', kicker: 'HEADS UP', hero: bigNum(f2(after.cg.gpa), clsCss(after.cg.gpa)), title: `You’re at ${esc(after.cls.label)} for now`, body: `Your CGPA went from ${f2(before.cg.gpa)} to ${f2(after.cg.gpa)}. Later levels count more, so this is very recoverable.`, ok: 'Show me how', onOk: toPlan });
+  }
+  // 4. Target secured or lost
+  const was = before.plan.status, now = after.plan.status;
+  if (P().target && was !== now) {
+    if ((now === 'secured' || now === 'achieved') && was !== 'secured' && was !== 'achieved') out.push({ tone: 'win', kicker: 'TARGET LOCKED IN', title: `${esc(targetLabel())} is yours`, body: 'Even average grades from here keep it. Legend.' });
+    else if (now === 'impossible' && was === 'possible') {
+      const alt = L.classify(after.plan.best);
+      out.push({ tone: 'miss', mood: 'worried', kicker: 'NEW TARGET?', title: `${esc(targetLabel())} is out of reach now`, body: `That stings. But <b>${esc(alt.label)}</b> is still fully yours. Want to aim for it?`, ok: 'Keep my target', secondary: { label: `Aim for ${alt.label}`, run: () => { P().target = alt.min; save(); render(); toast(`New target: ${alt.label}`); } } });
+    }
+  }
+  // 5. Personal best semester
+  if (before.best && after.best && after.best.gpa > before.best.gpa + 0.004) out.push({ tone: 'win', kicker: 'PERSONAL BEST', hero: bigNum(f2(after.best.gpa), clsCss(after.best.gpa)), title: 'Your best semester yet', body: `${esc(after.best.name)} beat your old best of ${f2(before.best.gpa)}.` });
+  out.slice(0, 3).forEach(moment);
+  return out.length;
+}
+
+/** Reading check-in: tick a session, grow the streak. */
+function tickSession(uid) {
+  const pr = state.progress, today = todayISO();
+  const list = pr.done[today] || [];
+  if (list.includes(uid)) { pr.done[today] = list.filter((x) => x !== uid); if (!pr.done[today].length) delete pr.done[today]; save(); render(); sound.tap(); return; }
+  const firstEver = !Object.values(pr.done).some((a) => a.length), wasDone = list.length > 0;
+  pr.done[today] = [...list, uid]; delete pr.missed[today];
+  const st = M.streak(pr, today), newBest = st > pr.best && pr.best >= 3; pr.best = Math.max(pr.best, st);
+  const { events } = weekEvents(), row = M.weekRow(pr, state.plan.days, today), wk = M.weekKey(today);
+  save(); render(); sound.ding(); buzz(12);
+  if (firstEver) moment({ tone: 'win', kicker: 'FIRST SESSION', title: 'You showed up!', body: 'That’s day 1. Tick a session on each reading day and watch your streak grow.', extra: weekDots(row, today), ok: 'Let’s go' });
+  else if (!wasDone && M.STREAK_MILESTONES.includes(st)) {
+    const line = { 3: 'Three reading days in a row. This is how habits start.', 7: 'A full week of reading. This is how First Class is built.', 14: 'Two weeks straight. Most people quit by now. Not you.', 30: 'A whole month. That’s discipline.' }[st] || `${st} reading days in a row. You’re built different.`;
+    moment({ tone: 'streak', hero: flameHero(st), kicker: newBest ? 'NEW RECORD' : 'STREAK', title: `${st}-day streak!`, body: line, extra: weekDots(row, today) });
+  } else if (M.perfectWeek(pr, events, today) && !pr.seen[wk]) {
+    pr.seen[wk] = true; save();
+    moment({ tone: 'win', kicker: 'PERFECT WEEK', title: 'Every session this week, done.', body: 'You did exactly what you planned. That’s rare. Rest well.', extra: weekDots(row, null) });
+  } else if (!wasDone) toast(`${st}-day streak. Keep going!`, null, { top: true, spark: 'proud' });
+  else toast('Session done. Nice!');
+}
+
+/** On open: notice reading days with nothing ticked and respond kindly. */
+function checkMisses() {
+  if (!P().onboarded) return;
+  const pr = state.progress, today = todayISO();
+  if (pr.lastCheck >= today) return;
+  const { events } = weekEvents();
+  if (!events.length) { if (!Object.keys(pr.done).length) pr.since = today; pr.lastCheck = today; save(); return; }
+  const before = M.streak(pr, today);
+  const r = M.findMisses(pr, state.plan.days, today, state.plan.untilISO);
+  r.missed.forEach((d) => { pr.missed[d] = true; });
+  pr.lastCheck = today; save();
+  if (!r.missed.length) return;
+  const lost = before - M.streak(pr, today);
+  const recent = Object.keys(pr.missed).filter((d) => d >= M.addDays(today, -7)).length;
+  const title = r.away ? `Welcome back, ${firstName()}` : r.missed.length === 1 ? `You missed ${DAYS_LONG[M.weekdayOf(r.missed[0])]}’s reading` : `You missed ${r.missed.length} reading days`;
+  moment({
+    tone: 'miss', mood: 'worried', kicker: r.away ? 'FRESH START' : 'MISSED READING', title,
+    body: `${lost > 1 ? `Your ${before}-day streak ended${pr.best > before ? `, but your record of ${pr.best} days still stands` : ''}. ` : ''}No guilt. What matters is today: tick one session and you’re back on.`,
+    extra: weekDots(M.weekRow(pr, state.plan.days, today), null), ok: 'Back on it',
+    secondary: recent >= 2 ? { label: 'Make my week lighter', run: () => { PLAN_ACTIONS['act-lighter'](); save(); render(); toast(`Lighter week: ${weekSummary()}`); } } : null,
+  });
+}
+
 /* ============================== Spark's line ============================== */
 
 function sparkLine() {
@@ -257,8 +391,7 @@ const VIEWS = {
         <div class="tile ${clsCss(cg.gpa)} stack-sm"><span class="label">Your CGPA</span><span class="big" id="cgpa-num" data-v="${cg.gpa}">${f2(cg.gpa)}</span>
           <b>${esc(cls.label)}</b><span class="tiny">from ${cg.units} units of results</span></div>
         <p>${need}</p></section>` : ''}
-      ${next ? `<a class="card row" href="#plan" style="text-decoration:none"><span class="g gP" style="height:44px;width:44px">${I.cal}</span>
-        <span class="grow"><span class="tiny muted">Next reading session</span><br><b>${esc(next.when)}, ${next.start}</b> · ${esc(next.title.replace('Study: ', ''))}</span></a>` : ''}
+      ${todayCard(next)}
       ${curCard}
       ${p.calc === 'simple' || !cg.units ? '' : `<section class="card stack-sm" aria-labelledby="lv-h"><h2 id="lv-h">Why later levels matter more</h2>
         <p class="small muted">At BIU, each level counts a different amount toward your final class. Bigger tile, bigger say.</p>
@@ -376,9 +509,26 @@ const VIEWS = {
         <div class="row wrap"><button class="btn sm" data-action="export">Back up</button>
           <label class="btn sm" for="import-file" tabindex="0" role="button" data-keyclick>Restore backup</label><input id="import-file" type="file" accept=".json,application/json" class="sr-only" tabindex="-1"></div>
         <button class="btn danger sm" data-action="wipe">Delete all my data</button></section>
-      <p class="tiny muted" style="text-align:center">Aim 2.1 · for Benson Idahosa University students · not an official BIU app</p></div>`;
+      <p class="tiny muted" style="text-align:center">Aim 2.2 · for Benson Idahosa University students · not an official BIU app</p></div>`;
   },
 };
+
+function todayCard(next) {
+  const { events } = weekEvents(); if (!events.length) return '';
+  const pr = state.progress, today = todayISO(), wd = new Date().getDay(), pl = state.plan;
+  const inRange = today >= pl.fromISO && today <= pl.untilISO;
+  const todays = inRange ? events.filter((e) => e.day === wd).sort((a, b) => a.start.localeCompare(b.start)) : [];
+  const st = M.streak(pr, today), done = pr.done[today] || [];
+  const code = (e) => esc(e.title.replace('Study: ', ''));
+  return `<section class="card stack-sm" aria-labelledby="td-h">
+    <div class="row spread"><h2 id="td-h">Today’s reading</h2><span class="streak-chip ${st ? 'on' : ''}" title="Reading streak">${FLAME}<b class="num">${st}</b><span class="sr-only">-day streak</span></span></div>
+    ${weekDots(M.weekRow(pr, pl.days, today))}
+    ${todays.length ? `<div class="list" style="margin:0 -20px">${todays.map((e) => { const on = done.includes(e.uid); return `<div class="item"><div class="grow"><div class="title">${code(e)}</div><div class="sub">${e.start}–${e.end}</div></div>
+      <button class="tick ${on ? 'on' : ''}" data-action="session-done" data-uid="${esc(e.uid)}" aria-pressed="${on}" aria-label="${code(e)} at ${e.start}: ${on ? 'done' : 'mark done'}">${I.check}<span>${on ? 'Done' : 'Done?'}</span></button></div>`; }).join('')}</div>`
+      : `<p class="small muted">Rest day.${next ? ` Next: <b style="color:var(--ink)">${esc(next.when)}, ${next.start}</b> · ${code(next)}` : ''}</p>`}
+    ${!Object.keys(pr.done).length && todays.length ? '<p class="hint">Finished a session? Tick it to start your streak.</p>' : pr.best > st && pr.best >= 3 ? `<p class="hint">Your best: ${pr.best} days.</p>` : ''}
+  </section>`;
+}
 
 /* ---------- week + reminders ---------- */
 function weekEvents() { const ch = coachNow(); return { ch, events: L.slotsToEvents(ch.slots, ch.courses) }; }
@@ -660,8 +810,7 @@ function reviewSheet(found) {
 
 /** Merge courses into the right semesters. Graded → semester by course code; ungraded → This semester. */
 function saveImported(list, opts = {}) {
-  const firstTime = !L.cgpa(state.semesters, P().policy).units;
-  const before = L.cgpa(state.semesters, P().policy);
+  const before = L.cgpa(state.semesters, P().policy), snapBefore = snap();
   const newCurrent = list.filter((c) => !c.grade);
   let cur = currentSem();
   if (newCurrent.length && cur && cur.courses.length && cur.courses.every((c) => c.grade)) {
@@ -696,15 +845,9 @@ function saveImported(list, opts = {}) {
   const after = L.cgpa(state.semesters, P().policy);
   const hasCurrent = L.inProgress(state.semesters).length > 0;
   if (opts.silent) { render(); return; }
-  if (after.units && (firstTime || after.points !== before.points)) {
+  if (after.units && (!before.units || after.points !== before.points)) {
     location.hash = '#home'; render();
-    const cls = L.classify(after.gpa);
-    const beforeCls = before.units ? L.classify(before.gpa).short : null;
-    const order = ['—', 'Pass', '3rd', '2:2', '2:1', '1st'];
-    if (firstTime) cheer(`Your CGPA is ${f2(after.gpa)}: ${cls.label}!`, after.gpa >= 3.5 ? 'proud' : 'happy');
-    else if (beforeCls && order.indexOf(cls.short) > order.indexOf(beforeCls)) cheer(`You moved up to ${cls.label}!`, 'proud');
-    else if (list.some((c) => c.grade === 'F')) cheer('An F is tough. We’ll plan around it together.', 'worried');
-    else toast(`Saved. CGPA now ${f2(after.gpa)}.`);
+    if (!celebrate(snapBefore)) toast(`Saved. CGPA now ${f2(after.gpa)}.`);
   } else if (hasCurrent) {
     location.hash = '#plan'; render(); cheer('Your plan for this semester is ready!', 'happy');
   } else { render(); toast(`Saved ${list.length} course${list.length > 1 ? 's' : ''}`); }
@@ -756,14 +899,13 @@ function addCoursesSheet(semId) {
     }
     if (!add.length) { dlg.close(); return; }
     dlg.close();
-    const before = L.cgpa(state.semesters, P().policy);
+    const snapBefore = snap();
     for (const a of add) {
       if (!a.grade && !sem.current) { saveImported([a], { silent: true }); continue; }
       sem.courses.push({ id: L.uid(), code: a.code, title: a.title, units: a.units, grade: a.grade, target: null, targetManual: false, difficulty: 2, diffManual: false });
     }
     refreshAutoWeek(); save(); render();
-    const after = L.cgpa(state.semesters, P().policy);
-    if (!before.units && after.units) cheer(`Your CGPA is ${f2(after.gpa)}!`, after.gpa >= 3.5 ? 'proud' : 'happy'); else toast(`Added ${add.length} course${add.length > 1 ? 's' : ''}`);
+    if (!celebrate(snapBefore)) toast(`Added ${add.length} course${add.length > 1 ? 's' : ''}`);
   });
 }
 
@@ -795,12 +937,9 @@ function courseSheet(id) {
     const u = Number(f.elements.units.value);
     if (!(u > 0 && u <= 9)) { const e = $('#c-err'); e.textContent = 'Units must be between 1 and 9.'; e.hidden = false; return; }
     dlg.close();
-    const before = L.cgpa(state.semesters, P().policy);
+    const snapBefore = snap();
     c.units = u; c.grade = pick || null; refreshAutoWeek(); save(); render();
-    const after = L.cgpa(state.semesters, P().policy);
-    const order = ['—', 'Pass', '3rd', '2:2', '2:1', '1st'];
-    if (before.gpa != null && after.gpa != null && order.indexOf(L.classify(after.gpa).short) > order.indexOf(L.classify(before.gpa).short)) cheer(`You moved up to ${L.classify(after.gpa).label}!`, 'proud');
-    else if (pick === 'F') cheer('An F is tough. We’ll plan around it together.', 'worried');
+    if (!celebrate(snapBefore) && pick === 'F') cheer('An F is tough. We’ll plan around it together.', 'worried');
   });
   const paint = () => dlg.querySelectorAll('[data-pick]').forEach((b) => { const on = b.dataset.pick === pick; b.setAttribute('aria-pressed', String(on)); if (b.dataset.pick) b.style.background = on ? `var(--g${b.dataset.pick})` : ''; });
   dlg.querySelectorAll('[data-pick]').forEach((b) => b.addEventListener('click', () => { pick = b.dataset.pick; paint(); sound.tap(); }));
@@ -915,6 +1054,7 @@ const ACTIONS = {
     state.plan.days = days.includes(d) ? days.filter((x) => x !== d) : [...days, d]; state.plan.custom = true;
     el.setAttribute('aria-pressed', String(state.plan.days.includes(d))); sound.tap(); save(); refreshPlanParts();
   },
+  'session-done': (el) => tickSession(el.dataset.uid),
   'reset-week': () => { state.plan.custom = false; state.plan.start = '19:00'; state.plan.length = 60; refreshAutoWeek(); save(); render(); toast('Aim chose your week again'); },
   ics: () => {
     const { events } = weekEvents(); if (!events.length) return;
@@ -1044,3 +1184,5 @@ setSound(P().sound);
 applyTheme(); applyIcon();
 refreshAutoWeek();
 render();
+checkMisses();
+addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') { checkMisses(); if (currentRoute() === 'home' && P().onboarded) render(); } });
