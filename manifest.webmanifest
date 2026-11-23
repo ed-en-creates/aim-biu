@@ -1,0 +1,22 @@
+{
+  "id": "./",
+  "name": "Aim · BIU CGPA & Study Planner",
+  "short_name": "Aim",
+  "description": "Upload your BIU portal results, see your CGPA and degree class, and get a study plan with reminders.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f2f6fb",
+  "theme_color": "#f2f6fb",
+  "categories": ["education", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Add results", "url": "./#results" },
+    { "name": "Study plan", "url": "./#plan" },
+    { "name": "Ask Spark", "url": "./#ask" }
+  ]
+}
