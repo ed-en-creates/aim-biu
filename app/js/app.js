@@ -677,6 +677,7 @@ async function runImport(files, semId) {
       <div class="sheet-actions"><button class="btn" data-close>Close</button></div></div>`;
     dlg.querySelector('[data-close]').onclick = () => dlg.close(); return;
   }
+  window.__aimLastOCR = text; // kept for debugging misreads
   const parsed = L.parsePortalText(text, P().prog);
   reviewSheet(parsed, semId);
 }

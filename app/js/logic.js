@@ -220,7 +220,7 @@ function lev(a, b) {
  */
 const SEM_RE = /^(FIRST|SECOND|1ST|2ND|FIRS|F1RST|FlRST)\b/i;
 const FOOTER_RE = /^(course|student|adviser|total|semester|signature|balance|maximum)/i;
-const TAIL_RE = /\s+(APPROVED|PENDING|NOT APPROVED|[A-Fa-f])\s*$/i;
+const TAIL_RE = /\s+(APPROVED|PENDING|NOT APPROVED|[(\[]?[A-Fa-f](?:[A-Fa-f])?[.,)\]]?)\s*$/i;
 
 /**
  * Phone-width portal tables wrap: the course number lands on the next line
@@ -276,7 +276,8 @@ export function parsePortalText(text, prog = 'csc') {
     let units = Number(fixDigits(m[3]));
     let rest = m[4].trim();
     let grade = null, status = 'in-progress';
-    const tail = /\s+([A-Fa-f])\s*$/.exec(rest);
+    // grade at the end; OCR sometimes doubles it ("Cc") or adds punctuation ("C.", "(C")
+    const tail = /\s+[(\[]?([A-Fa-f])(\1)?[.,)\]]?\s*$/i.exec(rest);
     if (tail) { grade = tail[1].toUpperCase(); rest = rest.slice(0, tail.index); status = 'graded'; }
     else rest = rest.replace(/\s+(APPROVED|PENDING|REMOVE|NOT APPROVED)\b.*$/i, '');
     const known = cat.get(code);

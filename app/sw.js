@@ -1,5 +1,5 @@
 // Bump VERSION on every release so users get the "new version" prompt.
-const VERSION = 'aim-v2.0.1';
+const VERSION = 'aim-v2.0.2';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'css/styles.css', 'js/app.js', 'js/logic.js', 'js/biu.js', 'js/fx.js', 'js/ask.js',
   'fonts/nunito.woff2', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/maskable-512.png', 'icons/apple-touch-icon.png', 'icons/favicon.svg'];
 const RUNTIME = 'aim-ocr-v5.1.1'; // screenshot reader files: cached on first use, kept across releases

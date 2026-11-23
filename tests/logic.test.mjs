@@ -128,6 +128,10 @@ t("phone-width portal screenshot (wrapped rows) parses correctly", () => {
   assert.equal(r.courses[4].title, 'General Physics I');
   assert.equal(r.courses[5].title, 'General Physics Practical I');
   assert.equal(r.semester, 1);
+  // OCR doubling or punctuating a grade letter
+  const odd = L.parsePortalText('FIRST MTH111 2 ALGEBRA AND TRIGONOMETRY Cc\nFIRST GST111 2 COMMUNICATION IN ENGLISH B.\nFIRST IDS111 1 RUDIMENTS OF CHRISTIAN LIFE (A');
+  assert.deepEqual(odd.courses.map((c) => `${c.code}:${c.grade}`), ['MTH 111:C', 'GST 111:B', 'IDS 111:A']);
+  assert.equal(odd.courses[0].title, 'Algebra and Trigonometry');
   // wrapped results page with grades
   const graded = L.parsePortalText('FIRST CSC 3 INTRODUCTION TO B\n111 COMPUTER SCIENCES\nFIRST MTH 2 ALGEBRA AND C\n111 TRIGONOMETRY');
   assert.deepEqual(graded.courses.map((c) => `${c.code}:${c.grade}`), ['CSC 111:B', 'MTH 111:C']);
