@@ -327,18 +327,16 @@ export function buildStudyPlan(courses, plan) {
   }
   const n = slots.length; if (!n) return { slots: [], perCourse: {} };
   const weights = list.map((c) => validUnits(c.units) * (DIFF_WEIGHT[c.difficulty] || 1.5));
-  const W = weights.reduce((a, b) => a + b, 0);
-  const raw = weights.map((w) => (w / W) * n);
-  const counts = raw.map(Math.floor);
-  if (n >= list.length) counts.forEach((c, i) => { if (c === 0) counts[i] = 1; });
+  // D'Hondt allocation: give each course one slot (if there are enough), then hand out the
+  // rest one by one to the course with the highest weight per slot already held.
+  // A heavier/harder course can never end up with fewer sessions than a lighter one.
+  const counts = list.map(() => (n >= list.length ? 1 : 0));
   let assigned = counts.reduce((a, b) => a + b, 0);
-  while (assigned > n) {
-    let idx = -1, best = -Infinity;
-    counts.forEach((c, i) => { if (c > 1 && c - raw[i] > best) { best = c - raw[i]; idx = i; } });
-    if (idx < 0) break; counts[idx]--; assigned--;
+  while (assigned < n) {
+    let best = -1, bi = 0;
+    weights.forEach((w, i) => { const q = w / (counts[i] + 1); if (q > best + 1e-9 || (Math.abs(q - best) < 1e-9 && w > weights[bi])) { best = q; bi = i; } });
+    counts[bi]++; assigned++;
   }
-  const order = raw.map((r, i) => ({ i, rem: r - Math.floor(r), w: weights[i] })).sort((a, b) => b.rem - a.rem || b.w - a.w);
-  let k = 0; while (assigned < n) { counts[order[k % order.length].i]++; assigned++; k++; }
   const left = [...counts]; let prev = -1;
   for (const slot of slots) {
     let pick = -1, best = -1;
@@ -396,3 +394,81 @@ export function slotsToEvents(slots, courses) {
   });
 }
 export const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4);
+
+/* -------------------- v2.1: auto-sorting and coaching -------------------- */
+
+/** Handbook §5: first digit = level, second digit = semester (CSC 112 → 100 level, first semester). */
+export function codeSlot(code) {
+  const m = /(\d)(\d)\d\b/.exec(code || '');
+  if (!m) return null;
+  const level = Math.min(6, Math.max(1, Number(m[1]))) * 100;
+  const sem = m[2] === '2' ? 2 : 1;
+  return { level, sem };
+}
+
+const HOURS_FACTOR = { 1: 0.75, 2: 1, 3: 1.5 };
+/** Recommended weekly reading hours: about 1 hour per unit, more for courses that are hard for you. */
+export function recommendedHours(courses) {
+  return courses.reduce((s, c) => s + validUnits(c.units) * (HOURS_FACTOR[c.difficulty] || 1), 0);
+}
+
+/** Pick sessions-per-day (and Saturday if needed) so the week roughly covers the recommended hours. */
+export function autoWeek(courses, base) {
+  const len = Number(base.length) || 60;
+  const want = Math.max(1, Math.round((recommendedHours(courses) * 60) / len));
+  let days = [1, 2, 3, 4, 5];
+  let perDay = Math.min(3, Math.max(1, Math.ceil(want / days.length)));
+  if (want > days.length * 3) days = [1, 2, 3, 4, 5, 6];
+  perDay = Math.min(3, Math.max(1, Math.ceil(want / days.length)));
+  return { ...base, days, perDay };
+}
+
+/** Past record in the same subject (prefix), for the coach card. */
+export function subjectHistory(code, semesters) {
+  const prefix = (code || '').split(' ')[0];
+  const past = allCourses(semesters).filter((c) => c.grade && (c.code || '').split(' ')[0] === prefix && c.code !== code);
+  const t = totals(past);
+  return { prefix, grades: past.map((c) => c.grade), avg: t.gpa };
+}
+
+/**
+ * Everything the plan screen needs for this semester's courses, in one place:
+ * effective difficulty (auto from history unless the student changed it),
+ * effective target (auto-suggested unless the student changed it), weight, reasons.
+ */
+export function coach(semesters, profile, plan) {
+  const wp = weightedPlan(semesters, { entry: profile.entry, target: profile.target, policy: profile.policy, mode: profile.calc });
+  const cur = inProgress(semesters).map((c) => {
+    const auto = autoDifficulty(c.code, semesters);
+    return { ...c, difficulty: c.diffManual ? c.difficulty : auto.level, diffReason: c.diffManual ? 'You set this' : auto.reason };
+  });
+  let need = null;
+  if (profile.target) need = wp.status === 'possible' ? wp.required : wp.status === 'impossible' ? BIU.max : wp.status === 'secured' ? 3.5 : Number(profile.target);
+  const auto = need != null && cur.length ? suggestGrades(cur, need, wp) : {};
+  const built = buildStudyPlan(cur, plan);
+  const courses = cur.map((c) => {
+    const series = seriesOf(c.code);
+    const row = wp.rows.find((r) => r.series === series);
+    const pct = wp.mode === 'simple' ? null : row ? Math.round(row.weight * 100) : 0;
+    const hist = subjectHistory(c.code, semesters);
+    const target = c.targetManual ? c.target : auto[c.id] || null;
+    return { ...c, target, targetAuto: !c.targetManual, seriesPct: pct, series, history: hist, minutes: built.perCourse[c.id] || 0 };
+  });
+  // projection with effective targets
+  const sim = semesters.map((s) => ({ ...s, courses: s.courses.map((x) => { const k = courses.find((y) => y.id === x.id); return k ? { ...x, target: k.target } : x; }) }));
+  const proj = projection(sim, profile.policy);
+  return { plan: wp, need, courses, slots: built.slots, perCourse: built.perCourse, projection: proj, recommended: recommendedHours(cur) };
+}
+
+/** One line of coaching for a course. */
+export function adviceFor(c) {
+  const parts = [];
+  if (c.seriesPct === 0) parts.push(`Counts 0% toward your class, but you must pass it`);
+  else if (c.seriesPct != null) parts.push(`${c.series}-level: counts ${c.seriesPct}% of your degree class`);
+  const h = c.history;
+  if (h.grades.length) {
+    const weak = h.avg < 3.5, strong = h.avg >= 4.5;
+    parts.push(`Your ${h.prefix} so far: ${h.grades.join(', ')}${weak ? '. Your weakest subject, so put in extra hours' : strong ? '. One of your strongest' : ''}`);
+  } else parts.push(`New subject for you`);
+  return parts;
+}

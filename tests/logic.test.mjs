@@ -149,4 +149,33 @@ t('study plan + calendar still correct', () => {
   assert.equal(L.buildStudyPlan(cur, { days: [1], start: '23:30', length: 60, perDay: 1 }).slots.length, 0);
 });
 
+
+t('codeSlot follows handbook §5', () => {
+  assert.deepEqual(L.codeSlot('CSC 112'), { level: 100, sem: 1 });
+  assert.deepEqual(L.codeSlot('MTH 122'), { level: 100, sem: 2 });
+  assert.deepEqual(L.codeSlot('CSC 426'), { level: 400, sem: 2 });
+  assert.equal(L.codeSlot('nothing'), null);
+});
+
+t('coach: automatic targets, hours, reasons', () => {
+  const profile = { entry: 'utme', target: 4.5, policy: 'all', calc: 'weighted' };
+  const week = L.autoWeek(L.inProgress(eden).map((c) => ({ ...c, difficulty: L.autoDifficulty(c.code, eden).level })), { length: 60, start: '19:00', breakMin: 10 });
+  assert.ok(week.perDay >= 2 && week.days.length >= 5, JSON.stringify(week));
+  const r = L.coach(eden, profile, week);
+  const by = Object.fromEntries(r.courses.map((c) => [c.code, c]));
+  assert.equal(by['ENT 211'].target, 'A'); assert.equal(by['MTH 211'].target, 'B'); assert.equal(by['CSC 112'].target, 'B');
+  assert.equal(by['MTH 211'].difficulty, 3);
+  assert.ok(by['MTH 211'].minutes > by['ENT 211'].minutes, 'hard MTH gets more reading time');
+  assert.equal(L.round2(r.projection.semesterGpa), 4.33);
+  assert.ok(L.adviceFor(by['MTH 211']).join(' ').includes('weakest'));
+  assert.ok(L.adviceFor(by['CSC 112']).join(' ').includes('5%'));
+  // marking ENT 211 hard changes its hours
+  const eden2 = eden.map((s) => ({ ...s, courses: s.courses.map((c) => (c.code === 'ENT 211' ? { ...c, difficulty: 3, diffManual: true } : c)) }));
+  const r2 = L.coach(eden2, profile, week);
+  assert.ok(r2.courses.find((c) => c.code === 'ENT 211').minutes > by['ENT 211'].minutes, 'hard → more hours');
+  // a manual target sticks
+  const eden3 = eden.map((s) => ({ ...s, courses: s.courses.map((c) => (c.code === 'GST 212' ? { ...c, target: 'B', targetManual: true } : c)) }));
+  assert.equal(L.coach(eden3, profile, week).courses.find((c) => c.code === 'GST 212').target, 'B');
+});
+
 console.log(`\n${passed} tests passed`);
