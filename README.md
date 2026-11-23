@@ -17,7 +17,7 @@ An installable web app (PWA) for Benson Idahosa University students, starting wi
 - **Other:** your own photo as the app icon, works offline, light and dark themes, backup and restore, undo.
 
 ## Run / deploy
-Static files, no build step: `python3 -m http.server 8080`, then open http://localhost:8080.
+Static files, no build step: `python3 -m http.server 8080`. The landing page is at `/` and the app at `/app/`.
 Any static host works (Vercel, Netlify, GitHub Pages: all have free tiers). Bump `VERSION` in `sw.js` on every release.
 
 ## Tests

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Aim · BIU CGPA & Study Planner</title>
+  <meta name="description" content="For BIU students: upload your portal results, see your CGPA and degree class, and get a study plan with reminders that gets you to your target.">
+  <meta name="theme-color" content="#f2f6fb" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#10131a" media="(prefers-color-scheme: dark)">
+  <meta name="color-scheme" content="light dark">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Aim">
+  <link id="manifest" rel="manifest" href="manifest.webmanifest">
+  <link id="apple-icon" rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link id="favicon" rel="icon" href="icons/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="fonts/nunito.woff2" as="font" type="font/woff2" crossorigin>
+  <script>
+    // Runs first so the browser sees the personalised icon when it decides what to install.
+    (function () {
+      try {
+        var s = JSON.parse(localStorage.getItem('aim:v2') || 'null');
+        var th = s && s.profile && s.profile.theme;
+        if (th === 'light' || th === 'dark') document.documentElement.dataset.theme = th;
+        var big = localStorage.getItem('aim:icon512'); if (!big) return;
+        var small = localStorage.getItem('aim:icon192') || big;
+        var type = function (d) { return d.slice(5, d.indexOf(';')); };
+        var base = location.origin + location.pathname.replace(/[^/]*$/, '');
+        var m = { id: base, name: 'Aim · BIU CGPA & Study Planner', short_name: 'Aim', start_url: base, scope: base, display: 'standalone',
+          background_color: '#f2f6fb', theme_color: '#f2f6fb',
+          icons: [{ src: small, sizes: '192x192', type: type(small), purpose: 'any' }, { src: big, sizes: '512x512', type: type(big), purpose: 'any' }, { src: big, sizes: '512x512', type: type(big), purpose: 'maskable' }] };
+        document.getElementById('manifest').href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(m));
+        document.getElementById('apple-icon').href = big;
+        var f = document.getElementById('favicon'); f.href = small; f.type = type(small);
+      } catch (e) { /* default icon */ }
+    })();
+  </script>
+  <link rel="stylesheet" href="css/styles.css">
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#view">Skip to content</a>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="#home" aria-label="Aim home"><img src="icons/icon-192.png" alt=""><span>Aim</span></a>
+      <button id="avatar-btn" class="avatar-btn" type="button" aria-label="Settings and profile"></button>
+    </header>
+    <main id="view" tabindex="-1"></main>
+  </div>
+  <nav class="tabs" id="tabs" aria-label="Main"></nav>
+  <dialog id="dlg" aria-labelledby="dlg-title"></dialog>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <noscript><p style="padding:24px">Aim needs JavaScript turned on.</p></noscript>
+</body>
+</html>

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import * as L from '../js/logic.js';
-import { seriesTotals, catalog, semesterCourses } from '../js/biu.js';
+import * as L from '../app/js/logic.js';
+import { seriesTotals, catalog, semesterCourses } from '../app/js/biu.js';
 
 let passed = 0;
 const t = (name, fn) => { fn(); passed++; console.log('ok -', name); };

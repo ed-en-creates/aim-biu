@@ -1,55 +1,386 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Aim · BIU CGPA & Study Planner</title>
-  <meta name="description" content="For BIU students: upload your portal results, see your CGPA and degree class, and get a study plan with reminders that gets you to your target.">
-  <meta name="theme-color" content="#f2f6fb" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#10131a" media="(prefers-color-scheme: dark)">
-  <meta name="color-scheme" content="light dark">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="Aim">
-  <link id="manifest" rel="manifest" href="manifest.webmanifest">
-  <link id="apple-icon" rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-  <link id="favicon" rel="icon" href="icons/favicon.svg" type="image/svg+xml">
-  <link rel="preload" href="fonts/nunito.woff2" as="font" type="font/woff2" crossorigin>
-  <script>
-    // Runs first so the browser sees the personalised icon when it decides what to install.
-    (function () {
-      try {
-        var s = JSON.parse(localStorage.getItem('aim:v2') || 'null');
-        var th = s && s.profile && s.profile.theme;
-        if (th === 'light' || th === 'dark') document.documentElement.dataset.theme = th;
-        var big = localStorage.getItem('aim:icon512'); if (!big) return;
-        var small = localStorage.getItem('aim:icon192') || big;
-        var type = function (d) { return d.slice(5, d.indexOf(';')); };
-        var base = location.origin + location.pathname.replace(/[^/]*$/, '');
-        var m = { id: base, name: 'Aim · BIU CGPA & Study Planner', short_name: 'Aim', start_url: base, scope: base, display: 'standalone',
-          background_color: '#f2f6fb', theme_color: '#f2f6fb',
-          icons: [{ src: small, sizes: '192x192', type: type(small), purpose: 'any' }, { src: big, sizes: '512x512', type: type(big), purpose: 'any' }, { src: big, sizes: '512x512', type: type(big), purpose: 'maskable' }] };
-        document.getElementById('manifest').href = 'data:application/manifest+json,' + encodeURIComponent(JSON.stringify(m));
-        document.getElementById('apple-icon').href = big;
-        var f = document.getElementById('favicon'); f.href = small; f.type = type(small);
-      } catch (e) { /* default icon */ }
-    })();
-  </script>
-  <link rel="stylesheet" href="css/styles.css">
-  <script type="module" src="js/app.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aim · Know your CGPA. Hit your target.</title>
+<meta name="description" content="Aim is a free app for BIU students. Screenshot your portal results and Aim works out your CGPA, what you need for First Class, and a study plan with reminders. No sign-up.">
+<meta property="og:title" content="Aim · Know your CGPA. Hit your target.">
+<meta property="og:description" content="Free for BIU students. Screenshot your portal, Aim does the maths and plans your reading.">
+<meta property="og:image" content="https://aim-biu.vercel.app/app/icons/icon-512.png">
+<meta name="theme-color" content="#fbfaf5">
+<link rel="icon" href="app/icons/favicon.svg" type="image/svg+xml">
+<link rel="preload" href="app/fonts/nunito.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="app/fonts/caveat.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+/*
+VOICE   a classmate who's good at maths: warm, quick, a little cheeky
+IDEA    the page behaves like your school things: exercise book, ruler, index cards, report card
+PICTURE a phone with Aim lying on ruled exercise-book paper, with sticky notes, a grade stamp and Spark peeking out
+COLOUR  paper cream + ink, Aim's traffic-light grade colours (lime, yellow, amber, coral), margin red
+TYPE    Nunito 800–900 for everything, Caveat for handwritten notes
+*/
+@font-face { font-family: 'Nunito'; src: url('app/fonts/nunito.woff2') format('woff2'); font-weight: 200 1000; font-display: swap; }
+@font-face { font-family: 'Caveat'; src: url('app/fonts/caveat.woff2') format('woff2'); font-weight: 700; font-display: swap; }
+:root {
+  color-scheme: light dark;
+  --paper: light-dark(#fbfaf5, #13161d); --paper-2: light-dark(#f3f1e8, #1a1e27); --ink: light-dark(#1d2230, #eef1f6); --muted: light-dark(#585f70, #a4adbf);
+  --rule: light-dark(#d9e5f3, #222a38); --margin: light-dark(#f4a3a3, #6b3434); --card: light-dark(#ffffff, #1d222c); --line: light-dark(#e6e3d6, #2b3241);
+  --lime: #7ccf1f; --lime-d: #5ea60f; --yellow: #ffd23f; --amber: #ffad33; --coral: #ff7a59; --red: #e5484d; --blue: light-dark(#1f5ad6, #8db4ff);
+  --gB: #c2e84d; --stamp: light-dark(#bf2a30, #ff8f92); --note: #fff27a; --tape: rgba(255, 238, 170, .75);
+}
+:root[data-theme=light] { color-scheme: light; } :root[data-theme=dark] { color-scheme: dark; }
+* { box-sizing: border-box; min-width: 0; }
+html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+body { margin: 0; background: var(--paper); color: var(--ink); font: 600 17px/1.6 'Nunito', ui-rounded, system-ui, sans-serif; overflow-x: clip; -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+h1, h2, h3, p { margin: 0; }
+.hand { font-family: 'Caveat', cursive; font-weight: 700; }
+:focus-visible { outline: 3px solid var(--blue); outline-offset: 3px; border-radius: 8px; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 max(4vw, 18px); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* ruled exercise-book paper */
+.ruled { background-image: linear-gradient(var(--paper) 0 0), repeating-linear-gradient(180deg, transparent 0 39px, var(--rule) 39px 40px); background-size: 100% 0, 100% 40px; position: relative; }
+.ruled::before { content: ''; position: absolute; top: 0; bottom: 0; left: max(3vw, 14px); width: 2px; background: var(--margin); opacity: .8; }
+
+/* header */
+header { position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--paper) 88%, transparent); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-bottom: 1px solid var(--line); }
+.nav { display: flex; align-items: center; justify-content: space-between; height: 68px; gap: 12px; }
+.logo { display: flex; align-items: center; gap: 10px; font-weight: 900; font-size: 1.35rem; text-decoration: none; letter-spacing: -.02em; }
+.logo img { width: 34px; height: 34px; border-radius: 10px; }
+.nav-links { display: flex; gap: 22px; font-weight: 800; font-size: .95rem; }
+.nav-links a { text-decoration: none; color: var(--muted); } .nav-links a:hover { color: var(--ink); }
+@media (max-width: 760px) { .nav-links { display: none; } }
+
+/* buttons */
+.btn { --c: var(--card); --s: var(--line); --t: var(--ink); display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 52px; padding: 0 24px; border-radius: 16px;
+  background: var(--c); color: var(--t); border: 2px solid var(--s); box-shadow: 0 4px 0 var(--s); font: 900 1.05rem 'Nunito', sans-serif; text-decoration: none; cursor: pointer; transition: transform .08s, box-shadow .08s; white-space: nowrap; }
+.btn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--s); }
+.btn.go { --c: var(--lime); --s: var(--lime-d); --t: #1d2230; }
+.btn.sm { min-height: 44px; padding: 0 18px; font-size: .95rem; border-radius: 14px; }
+.btn svg { width: 20px; height: 20px; }
+
+/* hero */
+.hero { padding: clamp(36px, 6vw, 80px) 0 clamp(48px, 7vw, 96px); }
+.hero .wrap { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: clamp(28px, 5vw, 64px); align-items: center; padding-left: max(6vw, 40px); }
+@media (max-width: 900px) { .hero .wrap { grid-template-columns: 1fr; } }
+.tag { display: inline-flex; align-items: center; gap: 8px; background: var(--card); border: 2px solid var(--line); border-radius: 999px; padding: 6px 14px; font-weight: 850; font-size: .9rem; box-shadow: 0 3px 0 var(--line); }
+.tag i { width: 10px; height: 10px; border-radius: 50%; background: var(--lime); box-shadow: 0 0 0 4px color-mix(in srgb, var(--lime) 30%, transparent); }
+h1 { font-size: clamp(2.6rem, 6.4vw, 4.6rem); font-weight: 900; line-height: 1.02; letter-spacing: -.04em; margin: 20px 0 18px; text-wrap: balance; }
+.hl { position: relative; white-space: nowrap; z-index: 0; }
+.hl svg { position: absolute; left: -4%; bottom: -.05em; width: 108%; height: .5em; z-index: -1; overflow: visible; }
+.hl path { stroke-dasharray: 600; stroke-dashoffset: 600; animation: draw 1s .4s ease-out forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.lede { font-size: clamp(1.05rem, 1.6vw, 1.2rem); color: var(--muted); max-width: 33em; font-weight: 650; }
+.lede b { color: var(--ink); }
+.ctas { display: flex; flex-wrap: wrap; gap: 12px; margin: 26px 0 14px; }
+.fine { font-size: .9rem; color: var(--muted); font-weight: 750; display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.fine span::before { content: '✓ '; color: var(--lime-d); font-weight: 900; }
+.scribble { font-size: 1.7rem; color: var(--blue); transform: rotate(-4deg); display: inline-block; margin-top: 18px; }
+
+/* hero picture */
+.desk { position: relative; min-height: 690px; padding-top: 60px; display: grid; place-items: center; }
+.phone { position: relative; width: 300px; height: 600px; border-radius: 48px; background: #1d2230; padding: 12px; box-shadow: 0 40px 80px -30px rgba(29,34,48,.55), inset 0 0 0 2px #39404f; transform: rotate(3deg); z-index: 2; }
+.screen { width: 100%; height: 100%; border-radius: 38px; background: #f2f6fb; overflow: hidden; padding: 40px 14px 14px; display: grid; gap: 10px; align-content: start; color: #1d2230; }
+.screen .bub { display: flex; gap: 8px; align-items: flex-end; font-size: .78rem; font-weight: 800; line-height: 1.3; }
+.screen .bub p { background: #fff; border: 2px solid #e2e8f1; border-radius: 14px 14px 14px 4px; padding: 8px 10px; }
+.tile { border-radius: 20px; padding: 14px; color: #1d2230; }
+.mini-big { font: 900 3rem/1 'Nunito'; letter-spacing: -.04em; }
+.lvls { display: flex; gap: 4px; height: 64px; }
+.lvls div { border-radius: 10px; padding: 6px; font-size: .62rem; font-weight: 900; display: flex; flex-direction: column; justify-content: space-between; background: #e6edf6; }
+.sticky { position: absolute; background: var(--note); color: #1d2230; padding: 18px 18px 22px; width: 170px; font-size: 1.6rem; line-height: 1.05; box-shadow: 0 14px 24px -12px rgba(0,0,0,.35); z-index: 3; }
+.sticky::before { content: ''; position: absolute; top: -10px; left: 50%; width: 70px; height: 22px; transform: translateX(-50%) rotate(-3deg); background: var(--tape); }
+.stamp { position: absolute; width: 112px; height: 112px; border-radius: 50%; border: 5px solid var(--stamp); color: var(--stamp); display: grid; place-items: center; text-align: center; font: 900 2.7rem/1 'Nunito'; transform: rotate(-14deg); z-index: 3; }
+.stamp small { display: block; font-size: .7rem; letter-spacing: .08em; margin-top: -4px; }
+.sum { position: absolute; font-size: 1.6rem; color: var(--muted); z-index: 1; white-space: nowrap; }
+.sum::after { content: ''; position: absolute; left: -6px; right: -6px; top: 52%; height: 4px; background: var(--red); border-radius: 4px; transform: rotate(-3deg); }
+.peek { position: absolute; z-index: 1; }
+@media (max-width: 520px) { .desk { min-height: 560px; transform: scale(.9); } .sum { display: none; } }
+
+/* ruler strip */
+.ruler { background: #ffe066; color: #1d2230; border-block: 2px solid #e0b400; height: 74px; position: relative; overflow: hidden; }
+.ruler::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 26px; background: repeating-linear-gradient(90deg, #8a6d00 0 2px, transparent 2px 12px), repeating-linear-gradient(90deg, #8a6d00 0 2px, transparent 2px 60px); background-size: 12px 12px, 60px 24px; background-repeat: repeat-x; }
+.track { position: absolute; bottom: 10px; display: flex; gap: 46px; white-space: nowrap; font-weight: 900; font-size: 1.15rem; animation: slide 30s linear infinite; }
+.track span::after { content: ''; display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: #1d2230; margin-left: 46px; vertical-align: middle; }
+@keyframes slide { to { transform: translateX(-50%); } }
+
+/* sections */
+section.band { padding: clamp(56px, 8vw, 110px) 0; }
+.kicker { font-size: 2rem; color: var(--blue); transform: rotate(-2deg); display: inline-block; }
+h2 { font-size: clamp(2rem, 4.6vw, 3.2rem); font-weight: 900; letter-spacing: -.035em; line-height: 1.05; margin: 6px 0 14px; text-wrap: balance; }
+.sub { color: var(--muted); max-width: 40em; font-weight: 650; }
+
+/* index cards */
+.cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 26px; margin-top: 44px; }
+@media (max-width: 900px) { .cards { grid-template-columns: 1fr; max-width: 520px; } }
+.icard { position: relative; background: var(--card); border-radius: 6px; padding: 26px 22px 24px; box-shadow: 0 18px 30px -18px rgba(0,0,0,.3); border-top: 26px solid color-mix(in srgb, var(--coral) 22%, var(--card));
+  background-image: repeating-linear-gradient(180deg, transparent 0 31px, var(--rule) 31px 32px); }
+.icard:nth-child(1) { transform: rotate(-1.6deg); } .icard:nth-child(2) { transform: rotate(1.2deg); margin-top: 18px; } .icard:nth-child(3) { transform: rotate(-.8deg); }
+@media (max-width: 900px) { .icard:nth-child(2) { margin-top: 0; } }
+.icard::before { content: ''; position: absolute; top: -36px; left: 50%; width: 92px; height: 26px; background: var(--tape); transform: translateX(-50%) rotate(2deg); }
+.icard .step { font-size: 1.7rem; color: var(--stamp); position: absolute; top: -30px; left: 16px; }
+.icard h3 { font-size: 1.35rem; font-weight: 900; margin: 4px 0 6px; }
+.icard p { color: var(--muted); font-weight: 650; font-size: .98rem; }
+.demo { margin-top: 16px; background: #f2f6fb; color: #1d2230; border-radius: 16px; padding: 12px; display: grid; gap: 6px; font-size: .85rem; font-weight: 850; }
+.drow { display: flex; justify-content: space-between; align-items: center; background: #fff; border-radius: 10px; padding: 7px 10px; }
+.g { display: inline-grid; place-items: center; min-width: 30px; height: 30px; border-radius: 9px; font-weight: 900; color: #1d2230; }
+.gA { background: var(--lime); } .gB { background: var(--gB); } .gC { background: var(--yellow); } .gD { background: var(--amber); } .gE { background: var(--coral); } .gF { background: var(--red); color: #fff; }
+
+/* try-it */
+.try { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr); gap: 28px; margin-top: 40px; align-items: start; }
+@media (max-width: 900px) { .try { grid-template-columns: 1fr; } }
+.sheet { background: var(--card); border-radius: 22px; border: 2px solid var(--line); box-shadow: 0 6px 0 var(--line); overflow: hidden; }
+.sheet .r { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 18px; border-top: 1px solid var(--line); }
+.sheet .r:first-child { border-top: 0; }
+.sheet .code { font-weight: 900; } .sheet .u { font-size: .85rem; color: var(--muted); }
+.pick { display: flex; gap: 5px; }
+.pick button { width: 42px; height: 44px; border-radius: 11px; border: 2px solid var(--line); background: var(--card); color: var(--ink); font: 900 1rem 'Nunito'; cursor: pointer; }
+.pick button[aria-pressed=true] { border-color: transparent; color: #1d2230; transform: scale(1.06); }
+.pick button[aria-pressed=true].F { color: #fff; }
+@media (max-width: 600px) { .sheet .r { grid-template-columns: 1fr; gap: 8px; } .pick { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); } .pick button { width: auto; } }
+.result { position: sticky; top: 90px; display: grid; gap: 14px; }
+.res-tile { border-radius: 28px; padding: 26px; color: #1d2230; transition: background .3s; }
+.res-tile .n { font: 900 clamp(4rem, 10vw, 5.6rem)/1 'Nunito'; letter-spacing: -.05em; font-variant-numeric: tabular-nums; }
+.say { display: flex; gap: 12px; align-items: flex-end; }
+.say p { background: var(--card); border: 2px solid var(--line); border-radius: 20px 20px 20px 6px; padding: 12px 14px; font-weight: 800; }
+
+/* levels */
+.levels { display: flex; gap: 8px; height: 220px; margin: 54px 0 20px; }
+.lv { border-radius: 22px; padding: 16px; display: flex; flex-direction: column; justify-content: space-between; color: #1d2230; font-weight: 900; transform-origin: bottom; }
+.lv b { font-size: clamp(1.6rem, 4vw, 3rem); line-height: 1; } .lv span { font-size: .95rem; }
+.lv:nth-child(1) { flex: 5 1 0; min-width: 72px; background: #f6e7a8; } .lv:nth-child(2) { flex: 20 1 0; background: var(--gB); } .lv:nth-child(3) { flex: 35 1 0; background: var(--lime); } .lv:nth-child(4) { flex: 40 1 0; background: #57ad0e; }
+.notes { display: flex; justify-content: space-between; gap: 20px; font-size: 1.6rem; color: var(--blue); }
+.notes span:last-child { text-align: right; }
+.reveal .lv { animation: grow .8s cubic-bezier(.3, 1.4, .5, 1) both; } .reveal .lv:nth-child(2) { animation-delay: .1s; } .reveal .lv:nth-child(3) { animation-delay: .2s; } .reveal .lv:nth-child(4) { animation-delay: .3s; }
+@keyframes grow { from { transform: scaleY(.15); opacity: 0; } }
+.pre .lv { opacity: 0; }
+
+/* Spark moods */
+.moods { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-top: 40px; }
+@media (max-width: 900px) { .moods { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.mood { background: var(--card); border: 2px solid var(--line); border-radius: 24px; padding: 18px; display: grid; gap: 10px; justify-items: start; box-shadow: 0 5px 0 var(--line); }
+.mood p { font-weight: 800; } .mood small { color: var(--muted); font-weight: 750; }
+
+/* privacy */
+.private { background: var(--paper-2); }
+.pgrid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 40px; align-items: center; }
+@media (max-width: 900px) { .pgrid { grid-template-columns: 1fr; } }
+.bigstamp { justify-self: center; width: 260px; height: 260px; border-radius: 50%; border: 8px double var(--stamp); color: var(--stamp); display: grid; place-items: center; text-align: center; transform: rotate(-12deg); font: 900 2.6rem/1 'Nunito'; letter-spacing: .04em; }
+.bigstamp small { display: block; font-size: .9rem; letter-spacing: .12em; margin-top: 8px; }
+.checks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 24px; }
+@media (max-width: 520px) { .checks { grid-template-columns: 1fr; } }
+.checks div { background: var(--card); border-radius: 18px; padding: 16px; border: 2px solid var(--line); }
+.checks b { display: block; font-size: 1.05rem; font-weight: 900; } .checks span { color: var(--muted); font-size: .95rem; font-weight: 650; }
+
+/* FAQ like an exam paper */
+.faq { max-width: 820px; margin-top: 30px; }
+.faq details { border-bottom: 2px dashed var(--line); padding: 4px 0; }
+.faq summary { cursor: pointer; font-weight: 900; font-size: 1.15rem; padding: 14px 0; list-style: none; display: flex; gap: 12px; align-items: baseline; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary .q { font-size: 1.6rem; color: var(--stamp); min-width: 40px; }
+.faq summary::after { content: '+'; margin-left: auto; font-size: 1.5rem; color: var(--muted); }
+.faq details[open] summary::after { content: '–'; }
+.faq p { color: var(--muted); font-weight: 650; padding: 0 0 16px 52px; }
+
+/* report card CTA */
+.report { max-width: 760px; margin: 0 auto; background: var(--card); border: 3px solid var(--ink); border-radius: 10px; padding: 0; box-shadow: 10px 10px 0 var(--ink); transform: rotate(-.6deg); }
+.report header { position: static; background: none; backdrop-filter: none; border-bottom: 3px solid var(--ink); padding: 16px 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.report h2 { font-size: clamp(1.6rem, 4vw, 2.4rem); margin: 0; }
+.report table { width: 100%; border-collapse: collapse; }
+.report td, .report th { text-align: left; padding: 12px 22px; border-bottom: 1px solid var(--line); font-weight: 800; }
+.report th { font-size: .8rem; color: var(--muted); letter-spacing: .06em; }
+.report td:last-child { font-size: 1.45rem; color: var(--blue); }
+.report .foot { padding: 22px; display: flex; gap: 18px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.sign { font-size: 1.8rem; }
+
+footer { padding: 40px 0 60px; color: var(--muted); font-weight: 700; font-size: .92rem; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 24px; justify-content: space-between; }
+
+/* Spark animation */
+.spark .spark-body { transform-origin: 60px 108px; animation: bob 3.2s ease-in-out infinite; }
+.spark .eyes { transform-origin: 60px 60px; animation: blink 5s infinite; }
+@keyframes bob { 50% { transform: translateY(-3px) scaleY(1.02); } }
+@keyframes blink { 0%, 96%, 100% { transform: scaleY(1); } 98% { transform: scaleY(.1); } }
+.wave .spark-body { animation: hop 2.6s ease-in-out infinite; }
+@keyframes hop { 0%, 70%, 100% { transform: translateY(0); } 80% { transform: translateY(-14px); } 90% { transform: translateY(0) scaleY(.95); } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } .hl path { stroke-dashoffset: 0; } .pre .lv { opacity: 1; } }
+</style>
 </head>
 <body>
-  <a class="skip" href="#view">Skip to content</a>
-  <div class="shell">
-    <header class="topbar">
-      <a class="brand" href="#home" aria-label="Aim home"><img src="icons/icon-192.png" alt=""><span>Aim</span></a>
-      <button id="avatar-btn" class="avatar-btn" type="button" aria-label="Settings and profile"></button>
-    </header>
-    <main id="view" tabindex="-1"></main>
-  </div>
-  <nav class="tabs" id="tabs" aria-label="Main"></nav>
-  <dialog id="dlg" aria-labelledby="dlg-title"></dialog>
-  <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <noscript><p style="padding:24px">Aim needs JavaScript turned on.</p></noscript>
+<header><div class="wrap nav">
+  <a class="logo" href="#top"><img src="app/icons/icon-192.png" alt="">Aim</a>
+  <nav class="nav-links" aria-label="Page sections"><a href="#how">How it works</a><a href="#try">Try it</a><a href="#rules">BIU rules</a><a href="#faq">FAQ</a></nav>
+  <a class="btn go sm" href="app/">Open Aim</a>
+</div></header>
+
+<main id="top">
+  <section class="hero ruled">
+    <div class="wrap">
+      <div>
+        <span class="tag"><i></i>For BIU students · Computer Science</span>
+        <h1>Know your CGPA. <span class="hl">Hit your target.<svg viewBox="0 0 300 30" preserveAspectRatio="none" aria-hidden="true"><path d="M4 20 C 60 8, 140 26, 296 12" fill="none" stroke="#7ccf1f" stroke-width="16" stroke-linecap="round" opacity=".55"/></svg></span></h1>
+        <p class="lede">Screenshot your result page on the portal. Aim works out your CGPA, tells you <b>exactly what you need for First Class</b>, and turns it into a reading plan that pings your calendar.</p>
+        <div class="ctas">
+          <a class="btn go" href="app/">Open Aim, it's free <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg></a>
+          <a class="btn" href="#try">Try the maths</a>
+        </div>
+        <p class="fine"><span>No sign-up</span><span>Results stay on your phone</span><span>Works offline</span></p>
+        <p class="hand scribble">↑ no calculator, no long thing</p>
+      </div>
+      <div class="desk" aria-label="Aim on a phone, lying on an exercise book">
+        <span class="sum hand" style="top:4px;left:0">(3×4 + 2×5 + …) ÷ 26 = ??</span>
+        <div class="sticky hand" style="top:200px;right:-14px;transform:rotate(6deg)">Goal:<br>First Class<br>by 400L!</div>
+        <div class="stamp" style="top:150px;left:10px">A<small>EXCELLENT</small></div>
+        <div class="peek" id="peek" style="bottom:4px;right:24px"></div>
+        <div class="phone"><div class="screen">
+          <div class="bub" id="phone-spark"><p>Average 4.52 from here for First Class. Very doable.</p></div>
+          <div class="tile" style="background:#ffd23f"><div style="font-size:.7rem;font-weight:900;opacity:.8">CGPA</div><div class="mini-big" id="phone-n">3.92</div><div style="font-weight:900;font-size:.85rem">Second Class Upper</div></div>
+          <div class="tile" style="background:#7ccf1f;padding:12px 14px"><div style="font-size:.66rem;font-weight:900;opacity:.85">TARGET · FIRST CLASS</div><div style="font:900 1.9rem/1 Nunito">4.52</div><div style="font-size:.72rem;font-weight:900">average needed from here</div></div>
+          <div class="lvls" aria-hidden="true"><div style="flex:5;background:#ffd23f">100<br>5%</div><div style="flex:20">200L<span>20%</span></div><div style="flex:35">300L<span>35%</span></div><div style="flex:40">400L<span>40%</span></div></div>
+          <div class="tile" style="background:#fff;border:2px solid #e2e8f1;display:flex;gap:8px;align-items:center;font-size:.78rem;font-weight:900;padding:10px 12px"><span class="g" style="background:#e6efff;width:30px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1f5ad6" stroke-width="2.6" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg></span><span>Tonight 7pm · MTH 211</span></div>
+        </div></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="ruler" aria-hidden="true"><div class="track" id="track"></div></div>
+
+  <section class="band" id="how"><div class="wrap">
+    <span class="hand kicker">how it works</span>
+    <h2>From portal to plan in under a minute.</h2>
+    <p class="sub">No forms to fill. Aim already knows BIU’s grading scale, degree classes and the Computer Science course list.</p>
+    <div class="cards">
+      <article class="icard"><span class="hand step">first,</span><h3>Snap your portal</h3><p>Screenshot your result or course registration page and upload it. Aim reads it on your phone. The picture never leaves your device.</p>
+        <div class="demo"><div class="drow"><span>CSC 111 · 3 units</span><span class="g gB">B</span></div><div class="drow"><span>CSC 113 · 2 units</span><span class="g gA">A</span></div><div class="drow"><span>MTH 111 · 2 units</span><span class="g gC">C</span></div></div></article>
+      <article class="icard"><span class="hand step">then,</span><h3>See where you stand</h3><p>Your CGPA, your class, and the exact average you need from here. It’s calculated with BIU’s real weighting, not guesswork.</p>
+        <div class="demo"><div class="tile" style="background:#ffd23f"><span style="font-size:.7rem;opacity:.8">CGPA</span><div style="font:900 2.4rem/1 Nunito">3.92</div><span style="font-size:.78rem">Second Class Upper</span></div></div></article>
+      <article class="icard"><span class="hand step">finally,</span><h3>Get a plan that pings you</h3><p>Grade targets for each course, a weekly reading timetable, and reminders in Google or your phone’s calendar.</p>
+        <div class="demo"><div class="drow"><span>Mon · MTH 211</span><span style="color:#5b6476">19:00</span></div><div class="drow"><span>Tue · CSC 112</span><span style="color:#5b6476">19:00</span></div><div class="drow" style="background:#ecf8dc"><span>✓ Added to calendar</span></div></div></article>
+    </div>
+  </div></section>
+
+  <section class="band ruled" id="try"><div class="wrap" style="padding-left:max(6vw,40px)">
+    <span class="hand kicker">quick maths, no calculator</span>
+    <h2>Go on, tap your grades.</h2>
+    <p class="sub">A sample 100-level semester. Change the grades and watch your GPA and class update.</p>
+    <div class="try">
+      <div class="sheet" id="sheet" role="group" aria-label="Sample courses"></div>
+      <div class="result" aria-live="polite">
+        <div class="res-tile" id="res"><div style="font-weight:900;opacity:.8">Semester GPA</div><div class="n" id="res-n">4.00</div><div style="font-weight:900;font-size:1.2rem" id="res-c">Second Class Upper</div></div>
+        <div class="say"><div id="res-spark"></div><p id="res-say">Solid! A couple more A’s and you’re in First Class territory.</p></div>
+        <a class="btn go" href="app/">Do it with my real results</a>
+      </div>
+    </div>
+  </div></section>
+
+  <section class="band" id="rules"><div class="wrap">
+    <span class="hand kicker">most students don’t know this</span>
+    <h2>At BIU, your years don’t count the same.</h2>
+    <p class="sub">The handbook weights your final grade by level. A unit at 400 level counts about 8 times as much as one at 100 level. Aim does this maths for you, and shows you where to put your effort.</p>
+    <div class="levels pre" id="levels" role="img" aria-label="100 level counts 5 percent, 200 level 20 percent, 300 level 35 percent, 400 level 40 percent">
+      <div class="lv"><span>100L</span><b>5%</b></div><div class="lv"><span>200L</span><b>20%</b></div><div class="lv"><span>300L</span><b>35%</b></div><div class="lv"><span>400L</span><b>40%</b></div>
+    </div>
+    <div class="notes hand"><span>↑ rough start? it’s only 5%</span><span>this is where First Class is won ↑</span></div>
+    <p class="sub" style="margin-top:18px;font-size:.92rem">4-year programme. Direct entry: 0 / 25 / 35 / 40%. From the Faculty of Computing undergraduate handbook.</p>
+  </div></section>
+
+  <section class="band ruled"><div class="wrap" style="padding-left:max(6vw,40px)">
+    <span class="hand kicker">meet your study buddy</span>
+    <h2>Spark cheers you on, and keeps it real.</h2>
+    <p class="sub">Hit a target and Spark celebrates. Slip and Spark won’t judge; it helps you plan the comeback. Ask Spark questions any time: “What if I get a C in MTH 211?”</p>
+    <div class="moods" id="moods"></div>
+  </div></section>
+
+  <section class="band private"><div class="wrap pgrid">
+    <div class="bigstamp" aria-hidden="true">PRIVATE<small>YOUR RESULTS · YOUR PHONE</small></div>
+    <div>
+      <span class="hand kicker">no wahala with your data</span>
+      <h2>Your results are your business.</h2>
+      <p class="sub">There’s no account to create and no server storing your grades. Everything lives on your phone, including the screenshot reader.</p>
+      <div class="checks">
+        <div><b>Free</b><span>No paywall. Open source.</span></div>
+        <div><b>No sign-up</b><span>Open it and go. No email, no password.</span></div>
+        <div><b>Stays on your phone</b><span>Screenshots are read on the device, never uploaded.</span></div>
+        <div><b>Works offline</b><span>Install it once and use it without data.</span></div>
+      </div>
+    </div>
+  </div></section>
+
+  <section class="band" id="faq"><div class="wrap">
+    <span class="hand kicker">answer all questions</span>
+    <h2>Questions</h2>
+    <div class="faq">
+      <details><summary><span class="q hand">1.</span>Is this an official BIU app?</summary><p>No. Aim is built by a BIU student for BIU students. It uses the grading rules in the Faculty of Computing handbook. Always confirm anything official with your course adviser.</p></details>
+      <details><summary><span class="q hand">2.</span>Which departments does it support?</summary><p>Computer Science for now, full-time and part-time, 100 to 400 level. More departments are coming. Course reps, reach out!</p></details>
+      <details><summary><span class="q hand">3.</span>Does it work with grades instead of scores?</summary><p>Yes. The portal shows letter grades, so that’s what Aim uses. If you know a score (like 68), Aim converts it to BIU’s letter grade.</p></details>
+      <details><summary><span class="q hand">4.</span>What about carryovers?</summary><p>Retaken courses are supported. By default every attempt counts in your CGPA; if your adviser says only the latest counts, switch it in Settings.</p></details>
+      <details><summary><span class="q hand">5.</span>How do I install it?</summary><p>Open Aim in Chrome (Android) or Safari (iPhone) and choose “Install app” or “Add to Home Screen”. You can even use your own photo as the app icon.</p></details>
+    </div>
+  </div></section>
+
+  <section class="band ruled"><div class="wrap" style="padding-left:max(6vw,40px)">
+    <div class="report">
+      <header><h2>End of term report</h2><span class="hand" style="font-size:1.5rem">Student: You</span></header>
+      <table><thead><tr><th scope="col">SUBJECT</th><th scope="col">GRADE</th><th scope="col">REMARK</th></tr></thead>
+        <tbody><tr><td>Knowing your CGPA</td><td><span class="g gA">A</span></td><td class="hand">instantly</td></tr>
+        <tr><td>Planning your reading</td><td><span class="g gA">A</span></td><td class="hand">sorted</td></tr>
+        <tr><td>Using a calculator</td><td><span class="g" style="background:var(--paper-2);color:var(--muted)">—</span></td><td class="hand">not needed</td></tr></tbody></table>
+      <div class="foot"><div><p style="font-weight:800">Remark: Has great potential. Should start using Aim today.</p><p class="hand sign">— Spark</p></div><a class="btn go" href="app/">Open Aim</a></div>
+    </div>
+  </div></section>
+</main>
+
+<footer><div class="wrap">
+  <span>Aim · made by a BIU student, for BIU students</span>
+  <span>Not an official Benson Idahosa University app · <a href="https://github.com/ed-en-creates/aim-biu">Open source on GitHub</a></span>
+</div></footer>
+
+<script type="module">
+import { spark } from './app/js/fx.js';
+{
+  const grades = { A: 5, B: 4, C: 3, D: 2, E: 1, F: 0 };
+  const colors = { A: '#7ccf1f', B: '#c2e84d', C: '#ffd23f', D: '#ffad33', E: '#ff7a59', F: '#e5484d' };
+  const classes = [[4.5, 'First Class', '#7ccf1f'], [3.5, 'Second Class Upper', '#ffd23f'], [2.4, 'Second Class Lower', '#ffad33'], [1.5, 'Third Class', '#ff7a59'], [1, 'Pass', '#f1d6d0'], [0, 'Below pass', '#f1d6d0']];
+  const courses = [['CSC 111', 'Introduction to Computer Sciences', 3, 'B'], ['CSC 113', 'Visual Basic Programming', 2, 'A'], ['MTH 111', 'Elementary Mathematics I', 2, 'B'], ['PHY 111', 'General Physics I', 2, 'A'], ['GST 111', 'Communication in English', 2, 'B']];
+
+  document.getElementById('peek').innerHTML = spark('happy', 120, 'wave');
+  document.getElementById('phone-spark').insertAdjacentHTML('afterbegin', spark('focus', 34));
+  document.getElementById('res-spark').innerHTML = spark('happy', 64);
+
+  const words = ['Upload your portal', 'Know your CGPA', 'See what you need', 'Plan your reading', 'Get reminders', 'Ask Spark', 'Hit your target'];
+  document.getElementById('track').innerHTML = [...words, ...words, ...words, ...words].map((w) => `<span>${w}</span>`).join('');
+
+  const sheet = document.getElementById('sheet');
+  sheet.innerHTML = courses.map((c, i) => `<div class="r"><div><div class="code">${c[0]}</div><div class="u">${c[1]} · ${c[2]} units</div></div>
+    <div class="pick" role="radiogroup" aria-label="Grade for ${c[0]}">${Object.keys(grades).map((g) => `<button type="button" class="${g}" data-i="${i}" data-g="${g}" aria-pressed="${c[3] === g}" aria-label="${g}" style="${c[3] === g ? `background:${colors[g]}` : ''}">${g}</button>`).join('')}</div></div>`).join('');
+
+  const lines = { 'First Class': ['proud', 'First Class! This is the energy. Protect it.'], 'Second Class Upper': ['happy', 'Solid! A couple more A’s and you’re in First Class territory.'], 'Second Class Lower': ['focus', 'Not bad, but there’s room. Aim will show you where.'], 'Third Class': ['worried', 'Tough semester. It’s fixable, and later levels count more.'], 'Pass': ['worried', 'We can turn this around. Let’s plan it together.'], 'Below pass': ['worried', 'Deep breath. One semester doesn’t define you. Let’s plan.'] };
+  let lastClass = null;
+  function update() {
+    let u = 0, p = 0; courses.forEach((c) => { u += c[2]; p += c[2] * grades[c[3]]; });
+    const gpa = p / u, cls = classes.find((c) => gpa + 1e-9 >= c[0]);
+    document.getElementById('res-n').textContent = gpa.toFixed(2);
+    document.getElementById('res-c').textContent = cls[1];
+    document.getElementById('res').style.background = cls[2];
+    const [mood, text] = lines[cls[1]];
+    if (cls[1] !== lastClass) { document.getElementById('res-spark').innerHTML = spark(mood, 64); document.getElementById('res-say').textContent = text; lastClass = cls[1]; }
+  }
+  sheet.addEventListener('click', (e) => {
+    const b = e.target.closest('button[data-g]'); if (!b) return;
+    const i = +b.dataset.i; courses[i][3] = b.dataset.g;
+    b.parentElement.querySelectorAll('button').forEach((x) => { const on = x === b; x.setAttribute('aria-pressed', on); x.style.background = on ? colors[x.dataset.g] : ''; });
+    update();
+  });
+  update();
+
+  const moods = [['proud', 'First-class semester: 4.67!', 'When you smash it'], ['focus', 'Average 4.52 from here. Lock in.', 'When it’s time to work'], ['worried', 'An F is tough. We’ll plan around it.', 'When things go wrong'], ['happy', 'Calendar’s set. See you at 7pm!', 'When you’re organised']];
+  document.getElementById('moods').innerHTML = moods.map(([m, s, w]) => `<div class="mood">${spark(m, 72)}<p>“${s}”</p><small>${w}</small></div>`).join('');
+
+  const lv = document.getElementById('levels');
+  const io = 'IntersectionObserver' in window ? new IntersectionObserver((es) => { if (es.some((e) => e.isIntersecting)) { lv.classList.remove('pre'); lv.classList.add('reveal'); io.disconnect(); } }, { threshold: .4 }) : null;
+  if (io) io.observe(lv); else lv.classList.remove('pre');
+}
+</script>
 </body>
 </html>
