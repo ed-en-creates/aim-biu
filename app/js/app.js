@@ -620,6 +620,32 @@ async function getOCR(onProgress) {
   return tessWorker;
 }
 
+/** Enlarge small screenshots and boost contrast: phone portal pages use small grey text. */
+async function prepImage(file) {
+  let img;
+  try { img = await createImageBitmap(file); } catch {
+    img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
+  }
+  const w0 = img.width, h0 = img.height;
+  let k = Math.min(3, Math.max(1, 1700 / w0));
+  if (w0 * k * h0 * k > 14e6) k = Math.max(1, Math.sqrt(14e6 / (w0 * h0)));
+  const c = document.createElement('canvas'); c.width = Math.round(w0 * k); c.height = Math.round(h0 * k);
+  const x = c.getContext('2d', { willReadFrequently: true });
+  x.imageSmoothingQuality = 'high'; x.drawImage(img, 0, 0, c.width, c.height);
+  const d = x.getImageData(0, 0, c.width, c.height), p = d.data, hist = new Uint32Array(256);
+  for (let i = 0; i < p.length; i += 4) { const g = (p[i] * 299 + p[i + 1] * 587 + p[i + 2] * 114) / 1000 | 0; p[i] = g; hist[g]++; }
+  const total = p.length / 4; let lo = 0, hi = 255, acc = 0;
+  for (; lo < 254; lo++) { acc += hist[lo]; if (acc > total * 0.01) break; }
+  acc = 0; for (; hi > lo + 1; hi--) { acc += hist[hi]; if (acc > total * 0.01) break; }
+  const span = Math.max(1, hi - lo);
+  let sum = 0;
+  for (let i = 0; i < p.length; i += 4) { const v = ((p[i] - lo) * 255) / span; p[i] = v < 0 ? 0 : v > 255 ? 255 : v; sum += p[i]; }
+  const mean = sum / total; // stretch around the page's own brightness: darkens thin grey text on light pages
+  for (let i = 0; i < p.length; i += 4) { let v = (p[i] - mean) * 1.6 + mean; v = v < 0 ? 0 : v > 255 ? 255 : v; p[i] = p[i + 1] = p[i + 2] = v; }
+  x.putImageData(d, 0, 0);
+  return c;
+}
+
 function importSheet(semId) {
   sheet(`<div class="sheet"><div class="row spread"><h2 id="dlg-title">Upload results</h2><button class="icon-btn" data-close aria-label="Close">${I.x}</button></div>
     <label class="drop" for="imp-file" id="drop">${spark('happy', 64)}<b>Choose screenshots</b><span class="small muted">Your BIU portal result page or course registration page. You can pick more than one.</span>
@@ -643,7 +669,7 @@ async function runImport(files, semId) {
     const w = await getOCR((m) => { if (m.status && m.progress != null) show(5 + m.progress * 40, m.status.includes('load') || m.status.includes('init') ? 'Loading the reader (first time only)' : 'Reading'); });
     for (let i = 0; i < files.length; i++) {
       show(50 + (i / files.length) * 45, `Reading picture ${i + 1} of ${files.length}`);
-      const { data } = await w.recognize(files[i]);
+      const { data } = await w.recognize(await prepImage(files[i]));
       text += '\n' + data.text;
     }
   } catch (e) {

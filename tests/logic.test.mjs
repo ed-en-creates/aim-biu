@@ -119,6 +119,21 @@ FIRST PHY 113 1 ‘GENERAL PHYSICS PRACTICAL I APPROVED`;
   assert.deepEqual(L.parsePortalText('random words\n\nnothing here').courses, []);
 });
 
+t("phone-width portal screenshot (wrapped rows) parses correctly", () => {
+  const txt = fs.readFileSync(new URL('./fixture-phone-registration.txt', import.meta.url), 'utf8');
+  const r = L.parsePortalText(txt);
+  assert.deepEqual(r.courses.map((c) => `${c.code}:${c.units}:${c.grade}`), ['CSC 112:3:null', 'ENT 211:2:null', 'GST 212:2:null', 'MTH 211:2:null', 'PHY 111:2:null', 'PHY 113:1:null']);
+  assert.equal(r.courses[0].title, 'Introduction to Computer Applications');
+  assert.equal(r.courses[2].title, 'Logic, Philosophy and Human Existence');
+  assert.equal(r.courses[4].title, 'General Physics I');
+  assert.equal(r.courses[5].title, 'General Physics Practical I');
+  assert.equal(r.semester, 1);
+  // wrapped results page with grades
+  const graded = L.parsePortalText('FIRST CSC 3 INTRODUCTION TO B\n111 COMPUTER SCIENCES\nFIRST MTH 2 ALGEBRA AND C\n111 TRIGONOMETRY');
+  assert.deepEqual(graded.courses.map((c) => `${c.code}:${c.grade}`), ['CSC 111:B', 'MTH 111:C']);
+  assert.equal(graded.courses[0].title, 'Introduction to Computer Sciences');
+});
+
 t('study plan + calendar still correct', () => {
   const cur = L.inProgress(eden).map((c) => ({ ...c, difficulty: L.autoDifficulty(c.code, eden).level }));
   const p = L.buildStudyPlan(cur, { days: [1, 2, 3, 4, 5], start: '19:00', length: 60, perDay: 2, breakMin: 10 });

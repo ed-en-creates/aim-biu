@@ -218,11 +218,51 @@ function lev(a, b) {
  * Turn OCR text from a BIU portal results/registration page into courses.
  * Returns { semester: 1|2|null, courses: [{code,title,units,grade,confidence,notes}] }
  */
+const SEM_RE = /^(FIRST|SECOND|1ST|2ND|FIRS|F1RST|FlRST)\b/i;
+const FOOTER_RE = /^(course|student|adviser|total|semester|signature|balance|maximum)/i;
+const TAIL_RE = /\s+(APPROVED|PENDING|NOT APPROVED|[A-Fa-f])\s*$/i;
+
+/**
+ * Phone-width portal tables wrap: the course number lands on the next line
+ * ("FIRST CSC 3 INTRODUCTION TO APPROVED" / "112 COMPUTER" / "APPLICATIONS").
+ * Join each row's continuation lines back into one canonical line.
+ */
+export function joinWrapped(lines) {
+  const groups = []; let cur = null;
+  for (const raw of lines) {
+    const line = String(raw).replace(/[‘’'"`~]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!line) continue;
+    if (SEM_RE.test(line)) { if (cur) groups.push(cur); cur = { head: line, cont: [] }; continue; }
+    if (cur && cur.cont.length < 3 && !FOOTER_RE.test(line)) { cur.cont.push(line); continue; }
+    if (cur) { groups.push(cur); cur = null; }
+    groups.push({ head: line, cont: [] });
+  }
+  if (cur) groups.push(cur);
+  return groups.map(({ head, cont }) => {
+    const split = /^(\S+)\s+([A-Za-z€]{2,4})\s+([0-9OoIl|]{1,2})\s+(.*)$/.exec(head);
+    const num = cont.length ? /^([0-9OoIl|SB]{3})\b\s*(.*)$/.exec(cont[0]) : null;
+    if (split && num) {
+      const tail = TAIL_RE.exec(split[4]);
+      const title = (tail ? split[4].slice(0, tail.index) : split[4]).trim();
+      const extra = [num[2], ...cont.slice(1)].filter(Boolean).join(' ');
+      return `${split[1]} ${split[2]} ${num[1]} ${split[3]} ${title} ${extra}${tail ? ' ' + tail[1] : ''}`.replace(/\s+/g, ' ');
+    }
+    const full = /^(\S+\s+[A-Za-z€]{2,4}\s?[0-9OoIl|SB]{3}\b\s+[0-9OoIl|]{1,2}\s+)(.*)$/.exec(head);
+    if (full && cont.length) {
+      const tail = TAIL_RE.exec(full[2]);
+      const title = (tail ? full[2].slice(0, tail.index) : full[2]).trim();
+      const extra = cont.filter((c) => /^[A-Za-z ,&()\-/]+$/.test(c)).join(' ');
+      return `${full[1]}${title} ${extra}${tail ? ' ' + tail[1] : ''}`.replace(/\s+/g, ' ');
+    }
+    return head;
+  });
+}
+
 export function parsePortalText(text, prog = 'csc') {
   const cat = catalog(prog);
   const courses = [];
   let semester = null;
-  for (const rawLine of String(text || '').split(/\r?\n/)) {
+  for (const rawLine of joinWrapped(String(text || '').split(/\r?\n/))) {
     const line = rawLine.replace(/[‘’'"`]/g, ' ').replace(/\s+/g, ' ').trim();
     if (!line) continue;
     const semM = /^(FIRST|SECOND|1ST|2ND)\b/i.exec(line);
@@ -258,7 +298,7 @@ function titleCase(s) {
     if (/^\(?(c\+\+|sql|hci|siwes)\)?$/i.test(w)) return w.toUpperCase();
     if (i > 0 && small.has(w)) return w;
     return w.charAt(0).toUpperCase() + w.slice(1);
-  }).join(' ').replace(/\bT$/, 'I'); // OCR often reads trailing "I" as "T"
+  }).join(' ').replace(/\s+/g, ' ').trim().replace(/ (T|1|l)$/, ' I'); // OCR often reads a trailing "I" as T/1
 }
 
 /* -------------------- Study plan + calendar (unchanged from v1, tested) -------------------- */
