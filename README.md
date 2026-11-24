@@ -1,6 +1,6 @@
 # Aim 2.0: CGPA & study planner for BIU students
 
-An installable web app (PWA) for Benson Idahosa University students, starting with Computer Science. It's free and open source. There's no server, no AI service, no accounts and no tracking.
+An installable web app (PWA) for Benson Idahosa University students, starting with Computer Science. It's free and open source. There's no server, no AI service, no accounts and no cookies. The only thing counted is anonymous screen visits (Vercel Web Analytics); results and screenshots never leave the phone.
 
 ## What it does
 - **Upload a portal screenshot.** Results or course registration pages are read **on the phone** by Tesseract (open-source text recognition, bundled in `vendor/`). The picture never leaves the device. The student checks and fixes the courses before saving.

@@ -112,7 +112,7 @@ const I = {
 const ROUTES = { home: { title: 'Home', icon: I.home, tab: 1 }, plan: { title: 'My plan', icon: I.plan, tab: 1 }, results: { title: 'Results', icon: I.results, tab: 1 }, ask: { title: 'Ask Spark', icon: I.ask, tab: 1 }, settings: { title: 'Settings' } };
 const currentRoute = () => { const r = location.hash.replace(/^#\/?/, '').split('?')[0] || 'home'; return ROUTES[r] ? r : 'home'; };
 
-let lastRoute = null;
+let lastRoute = null, lastScreen = null;
 function render() {
   const r = P().onboarded ? currentRoute() : 'onboarding';
   const view = $('#view');
@@ -124,6 +124,8 @@ function render() {
   $('#tabs').hidden = !P().onboarded;
   renderAvatar();
   AFTER[r]?.();
+  const screen = r === 'onboarding' ? `welcome-${onb.step + 1}` : r;
+  if (screen !== lastScreen) { lastScreen = screen; try { window.va?.('pageview', { route: `/app/${screen}`, path: `/app/${screen}` }); } catch { /* analytics optional */ } }
   if (r !== lastRoute) { scrollTo(0, 0); if (lastRoute !== null) view.focus({ preventScroll: true }); lastRoute = r; }
   else if (focusId) document.getElementById(focusId)?.focus({ preventScroll: true });
 }
@@ -505,7 +507,7 @@ const VIEWS = {
           <input id="icon-file" type="file" accept="image/*" class="sr-only" tabindex="-1">${icon ? '<button class="btn sm" data-action="icon-reset">Use default</button>' : ''}</div></section>
       <section class="card stack" aria-labelledby="s-inst"><h2 id="s-inst">Install</h2>${installBody()}</section>
       <section class="card stack" aria-labelledby="s-data"><h2 id="s-data">Privacy & data</h2>
-        <p class="small muted">Your results live only on this phone. Screenshots are read on the phone and never uploaded. There are no accounts, no tracking and no ads.</p>
+        <p class="small muted">Your results live only on this phone. Screenshots are read on the phone and never uploaded. There are no accounts, no cookies and no ads. Aim only counts anonymous visits to each screen, so we know how many students it helps.</p>
         <div class="row wrap"><button class="btn sm" data-action="export">Back up</button>
           <label class="btn sm" for="import-file" tabindex="0" role="button" data-keyclick>Restore backup</label><input id="import-file" type="file" accept=".json,application/json" class="sr-only" tabindex="-1"></div>
         <button class="btn danger sm" data-action="wipe">Delete all my data</button></section>
